@@ -9,6 +9,7 @@ import Section.SwagSection;
 import Song.SwagSong;
 import Shaders.PulseEffect;
 import WiggleEffect.WiggleEffectType;
+import flash.geom.ColorTransform;
 import flixel.FlxBasic;
 import flixel.FlxCamera;
 import flixel.FlxG;
@@ -249,6 +250,10 @@ class PlayState extends MusicBeatState
 	public var instakillOnMiss:Bool = false;
 	public var cpuControlled:Bool = false;
 	public var practiceMode:Bool = false;
+	public var poison:Bool = false;
+	public var poisonMult:Float = 0;
+	var poisonTimer:FlxTimer = null;
+	var poisonSprite:FlxSprite = null;
 
 	//local storage of ghost tapping
 	public var tappy:Bool = false;
@@ -259,6 +264,7 @@ class PlayState extends MusicBeatState
 
 	//icons
 	public var iconP1:HealthIcon;
+	public var iconP1Poison:HealthIcon;
 	public var iconP2:HealthIcon;
 	public var iconP4:HealthIcon;
 	public var flinching:Bool = false;
@@ -461,6 +467,7 @@ class PlayState extends MusicBeatState
 		instakillOnMiss = ClientPrefs.getGameplaySetting('instakill', false);
 		practiceMode = ClientPrefs.getGameplaySetting('practice', false);
 		cpuControlled = ClientPrefs.getGameplaySetting('botplay', false);
+		poison = ClientPrefs.getGameplaySetting('poison', false);
 		if(cpuControlled == true && !SONG.allowBot) {
 			cpuControlled = false;
 		}
@@ -930,6 +937,7 @@ class PlayState extends MusicBeatState
 				autoLayer(layerArray);
 
 			case 'tank': //Week 7 - Ugh, Guns, Stress
+				tankmanRainbow = false;
 				var layerArray:Array<FlxBasic> = [];
 				
 				var sky:BGSprite = new BGSprite('tankSky', -400, -400, 0, 0);
@@ -1303,15 +1311,28 @@ class PlayState extends MusicBeatState
 		timeBar = new FlxBar(timeBarBG.x + 4, timeBarBG.y + 4, LEFT_TO_RIGHT, Std.int(timeBarBG.width - 8), Std.int(timeBarBG.height - 8), this,
 			'songPercent', 0, 1);
 		timeBar.scrollFactor.set();
+		var color:FlxColor;
+		var blockyness:Int = 1;
+		if(isPixelStage) blockyness = 5;
 		if (!ClientPrefs.changeTBcolour)
 		{
-			timeBar.createFilledBar(0xFF000000, FlxColor.fromRGB(ClientPrefs.timeBarRed, ClientPrefs.timeBarGreen, ClientPrefs.timeBarBlue));
+			timeBar.createGradientBar([0xFF000000], [color = FlxColor.fromRGB(ClientPrefs.timeBarRed, ClientPrefs.timeBarGreen, ClientPrefs.timeBarBlue), FlxColor.subtract(color, 0x00333333)], blockyness, 90);
 		}
 		else
 		{
-			timeBar.createFilledBar(0xFF000000, FlxColor.fromRGB(dad.healthColorArray[0], dad.healthColorArray[1], dad.healthColorArray[2]));
+			if (dad != null) {
+				timeBar.createGradientBar([0xFF000000], [color = FlxColor.fromRGB(dad.healthColorArray[0], dad.healthColorArray[1], dad.healthColorArray[2]), FlxColor.subtract(color, 0x00333333)], blockyness, 90);
+			} else {
+				timeBar.createGradientBar([0xFF000000], [color = FlxColor.fromRGB(ClientPrefs.timeBarRed, ClientPrefs.timeBarGreen, ClientPrefs.timeBarBlue), FlxColor.subtract(color, 0x00333333)], blockyness, 90);
+			}
 		}
-		timeBar.numDivisions = 800; //How much lag this causes?? Should i tone it down to idk, 400 or 200?
+		#if (haxe >= "4.1.0")
+			if (ClientPrefs.lowQuality || isPixelStage) {
+				timeBar.numDivisions = 100;
+			} else {
+				timeBar.numDivisions = 800; //what if it was 1280 :flushed:
+			}
+		#end
 		timeBar.alpha = 0;
 		timeBar.visible = showTime;
 		if (timeBar.visible == true && showJustTimeText) {
@@ -1437,33 +1458,62 @@ class PlayState extends MusicBeatState
 			// healthBar
 			healthBar.visible = !ClientPrefs.hideHud;
 			healthBar.alpha = ClientPrefs.healthBarAlpha;
+			#if (haxe >= "4.1.0")
+			if (ClientPrefs.lowQuality) {
+				healthBar.numDivisions = 100;
+			} else {
+				healthBar.numDivisions = 200; //double res because you dont really need much more than that, since ynow, the health isnt constantly draining or anything
+				//as a side effect, the health icons get pushed away from eachother a bit
+			}
+			#end
 			add(healthBar);
 			healthBarBG.sprTracker = healthBar;
 
-			healthBarMiddle = new FlxBar(healthBar.x, healthBarBG.y + 14, RIGHT_TO_LEFT, Std.int(healthBarBG.width - 8), Std.int(healthBarBG.height / 3), this,
+			healthBarMiddle = new FlxBar(healthBar.x, healthBarBG.y + 13, RIGHT_TO_LEFT, Std.int(healthBarBG.width - 8), Std.int(healthBarBG.height / 3), this,
 				'health', 0, 2);
 			healthBarMiddle.scrollFactor.set();
 			// healthBar
 			healthBarMiddle.visible = !ClientPrefs.hideHud;
 			healthBarMiddle.alpha = ClientPrefs.healthBarAlpha;
+			#if (haxe >= "4.1.0")
+			if (ClientPrefs.lowQuality) {
+				healthBarMiddle.numDivisions = 100;
+			} else {
+				healthBarMiddle.numDivisions = 200;
+			}
+			#end
 			add(healthBarMiddle);
 			//healthBarBG.sprTracker = healthBar;
 
-			healthBarMiddleHalf = new FlxBar(healthBar.x, healthBarBG.y + 16, RIGHT_TO_LEFT, Std.int(healthBarBG.width - 8), Std.int(healthBarBG.height / 3), this,
+			healthBarMiddleHalf = new FlxBar(healthBar.x, healthBarBG.y + 15, RIGHT_TO_LEFT, Std.int(healthBarBG.width - 8), Std.int(healthBarBG.height / 3) - 2, this,
 				'health', 0, 2);
 			healthBarMiddleHalf.scrollFactor.set();
 			// healthBar
 			healthBarMiddleHalf.visible = !ClientPrefs.hideHud;
 			healthBarMiddleHalf.alpha = ClientPrefs.healthBarAlpha;
+			#if (haxe >= "4.1.0")
+			if (ClientPrefs.lowQuality) {
+				healthBarMiddleHalf.numDivisions = 100;
+			} else {
+				healthBarMiddleHalf.numDivisions = 200;
+			}
+			#end
 			add(healthBarMiddleHalf);
 			//healthBarBG.sprTracker = healthBar;
 
-			healthBarBottom = new FlxBar(healthBar.x, healthBarBG.y + 18, RIGHT_TO_LEFT, Std.int(healthBarBG.width - 8), Std.int(healthBarBG.height / 3), this,
+			healthBarBottom = new FlxBar(healthBar.x, healthBarBG.y + 18, RIGHT_TO_LEFT, Std.int(healthBarBG.width - 8), Std.int(healthBarBG.height / 3) - 2, this,
 				'health', 0, 2);
 			healthBarBottom.scrollFactor.set();
 			// healthBar
 			healthBarBottom.visible = !ClientPrefs.hideHud;
 			healthBarBottom.alpha = ClientPrefs.healthBarAlpha;
+			#if (haxe >= "4.1.0")
+			if (ClientPrefs.lowQuality) {
+				healthBarBottom.numDivisions = 100;
+			} else {
+				healthBarBottom.numDivisions = 200;
+			}
+			#end
 			add(healthBarBottom);
 			//healthBarBG.sprTracker = healthBar;
 		
@@ -1635,6 +1685,13 @@ class PlayState extends MusicBeatState
 		iconP1.visible = !ClientPrefs.hideHud;
 		iconP1.alpha = ClientPrefs.healthBarAlpha;
 
+		iconP1Poison = new HealthIcon(boyfriend.healthIcon, true);
+		iconP1Poison.y = healthBar.y - 65;
+		iconP1Poison.visible = false;
+		iconP1Poison.alpha = ClientPrefs.healthBarAlpha;
+		iconP1Poison.setColorTransform(1,0,1,1,255,-231,255,0);
+		//iconP1Poison.color = FlxColor.fromRGB(171,24,233);
+
 		iconP2 = new HealthIcon(dad.healthIcon, false);
 		iconP2.y = healthBar.y - 70;
 		iconP2.visible = !ClientPrefs.hideHud;
@@ -1649,6 +1706,7 @@ class PlayState extends MusicBeatState
 		iconP4.updateHitbox();
 
 		add(iconP4);
+		add(iconP1Poison);
 		add(iconP1);
 		add(iconP2);
 		reloadHealthBarColors(false);
@@ -1688,6 +1746,15 @@ class PlayState extends MusicBeatState
 				sarvRightTxt.borderStyle = SHADOW;
 				sarvRightTxt.x = -FlxG.width/2 + 315;
 			}
+			if (ClientPrefs.scoreDisplay == 'FNF+') {
+				sarvRightTxt.setFormat(Paths.font("vcr.ttf"), 32, FlxColor.WHITE, RIGHT, FlxTextBorderStyle.OUTLINE, FlxColor.BLACK);
+				sarvRightTxt.x = -15;
+				sarvRightTxt.y = FlxG.height/2 - 100;
+			}
+			if (ClientPrefs.scoreDisplay == 'FNM') {
+				sarvRightTxt.setFormat(Paths.font("helvetica.ttf"), 20, FlxColor.WHITE, RIGHT, FlxTextBorderStyle.OUTLINE, FlxColor.BLACK);
+				sarvRightTxt.y -= 20;
+			}
 			sarvRightTxt.visible = !ClientPrefs.hideHud;
 
 			sarvAccuracyTxt = new FlxText(sarvAccuracyBg.x + 5, scoreTxt.y, FlxG.width, "", 20);
@@ -1715,6 +1782,11 @@ class PlayState extends MusicBeatState
 			botplayTxt.y = timeBarBG.y - 78;
 		}
 
+		poisonSprite = new FlxSprite().loadGraphic(Paths.image('poisonEffect'));
+		poisonSprite.alpha = 0;
+		poisonSprite.scrollFactor.set();
+		add(poisonSprite);
+
 		//lets set ALL the cameras at once
 		strumLineNotes.cameras = [camHUD];
 		grpNoteSplashes.cameras = [camHUD];
@@ -1724,6 +1796,7 @@ class PlayState extends MusicBeatState
 		healthBarMiddleHalf.cameras = [camHUD];
 		healthBarBottom.cameras = [camHUD];
 		healthBarBG.cameras = [camHUD];
+		iconP1Poison.cameras = [camHUD];
 		iconP1.cameras = [camHUD];
 		iconP2.cameras = [camHUD];
 		iconP4.cameras = [camHUD];
@@ -1739,6 +1812,7 @@ class PlayState extends MusicBeatState
 		timeBarBG.cameras = [camHUD];
 		timeTxt.cameras = [camHUD];
 		doof.cameras = [camHUD];
+		poisonSprite.cameras = [camHUD];
 
 		// if (SONG.song == 'South')
 		// FlxG.camera.alpha = 0.7;
@@ -1984,7 +2058,7 @@ class PlayState extends MusicBeatState
 
 	//this function might be a little confusing so ill explain (helpful comment man is here). the first variable is if its using p4 as the main icon or dad. the second is for if its gf or dad.
 	//also this is probably very VERY badly written so lets rewrite this eventually, capiche?
-	public function reloadHealthBarColors(p4:Bool, ?useGf:Bool = null) {
+	public function reloadHealthBarColors(p4:Bool, ?useGf:Bool = null, ?usePoison = null) {
 
 		if (!ClientPrefs.greenhp)
 		{
@@ -1996,132 +2070,73 @@ class PlayState extends MusicBeatState
 			if (useGf) {
 				who = gf;
 			}
+			var whoColors1:FlxColor = FlxColor.fromRGB(who.healthColorArray[0], who.healthColorArray[1], who.healthColorArray[2]);
+			var whoColors2:FlxColor = FlxColor.fromRGB(who.healthColorArrayMiddle[0], who.healthColorArrayMiddle[1], who.healthColorArrayMiddle[2]);
+			var whoColors3:FlxColor = FlxColor.fromRGB(who.healthColorArrayBottom[0], who.healthColorArrayBottom[1], who.healthColorArrayBottom[2]);
+			var who2Colors1:FlxColor = FlxColor.fromRGB(who2.healthColorArray[0], who2.healthColorArray[1], who2.healthColorArray[2]);
+			var who2Colors2:FlxColor = FlxColor.fromRGB(who2.healthColorArrayMiddle[0], who2.healthColorArrayMiddle[1], who2.healthColorArrayMiddle[2]);
+			var who2Colors3:FlxColor = FlxColor.fromRGB(who2.healthColorArrayBottom[0], who2.healthColorArrayBottom[1], who2.healthColorArrayBottom[2]);
+			if (usePoison != null) {
+				who2Colors1 = FlxColor.fromRGB(171,24,233);
+				who2Colors2 = who2Colors1;
+				who2Colors3 = who2Colors1;
+			}
+			var healthBars:Array<FlxBar> = [healthBar, healthBarMiddle, healthBarMiddleHalf, healthBarBottom];
+			var whoColors:Array<FlxColor> = [];
+			var who2Colors:Array<FlxColor> = [];
+			var curHealthBarCombo:String = who2.healthBarCount + ',' + who.healthBarCount; //dad, THEN bf
+			switch (curHealthBarCombo)
+			{
+				case '1,1':
+					who2Colors = [who2Colors1, who2Colors1, who2Colors1, who2Colors1]; //all the same
+					whoColors = [whoColors1, whoColors1, whoColors1, whoColors1];
+				case '1,2':
+					who2Colors = [who2Colors1, who2Colors1, who2Colors1, who2Colors1];
+					whoColors = [whoColors1, whoColors1, whoColors2, whoColors2]; //split
+				case '2,1':
+					who2Colors = [who2Colors1, who2Colors1, who2Colors2, who2Colors2];
+					whoColors = [whoColors1, whoColors1, whoColors1, whoColors1];
+				case '3,1':
+					who2Colors = [who2Colors1, who2Colors2, who2Colors2, who2Colors3]; //thirds
+					whoColors = [whoColors1, whoColors1, whoColors1, whoColors1];
+				case '1,3':
+					who2Colors = [who2Colors1, who2Colors1, who2Colors1, who2Colors1];
+					whoColors = [whoColors1, whoColors2, whoColors2, whoColors3];
+				case '2,2':
+					who2Colors = [who2Colors1, who2Colors1, who2Colors2, who2Colors2];
+					whoColors = [whoColors1, whoColors1, whoColors2, whoColors2];
+				case '2,3':
+					who2Colors = [who2Colors1, who2Colors1, who2Colors2, who2Colors2];
+					whoColors = [whoColors1, whoColors2, whoColors2, whoColors3];
+				case '3,2':
+					who2Colors = [who2Colors1, who2Colors2, who2Colors2, who2Colors3];
+					whoColors = [whoColors1, whoColors1, whoColors2, whoColors2];
+				case '3,3':
+					who2Colors = [who2Colors1, who2Colors2, who2Colors2, who2Colors3];
+					whoColors = [whoColors1, whoColors2, whoColors2, whoColors3];
+				default:
+					who2Colors = [who2Colors1, who2Colors1, who2Colors1, who2Colors1];
+					whoColors = [whoColors1, whoColors1, whoColors1, whoColors1];
+			}
 			/*if (hudIsSwapped) {
 				var storage:Character = who2;
 				who2 = who;
 				who = storage;
 			}*/
 				if (who2.healthBarCount != null && who.healthBarCount != null) /*check for sexy hp bar counter*/ {
-					var curHealthBarCombo:String = who2.healthBarCount + ',' + who.healthBarCount;
-					switch (curHealthBarCombo)
-					{
-						case '1,1':
-							healthBar.createFilledBar(FlxColor.fromRGB(who.healthColorArray[0], who.healthColorArray[1], who.healthColorArray[2]),
-							FlxColor.fromRGB(who2.healthColorArray[0], who2.healthColorArray[1], who2.healthColorArray[2]));
-		
-							healthBarMiddle.createFilledBar(FlxColor.fromRGB(who.healthColorArray[0], who.healthColorArray[1], who.healthColorArray[2]),
-							FlxColor.fromRGB(who2.healthColorArray[0], who2.healthColorArray[1], who2.healthColorArray[2]));
-		
-							healthBarMiddleHalf.createFilledBar(FlxColor.fromRGB(who.healthColorArray[0], who.healthColorArray[1], who.healthColorArray[2]),
-							FlxColor.fromRGB(who2.healthColorArray[0], who2.healthColorArray[1], who2.healthColorArray[2]));
-		
-							healthBarBottom.createFilledBar(FlxColor.fromRGB(who.healthColorArray[0], who.healthColorArray[1], who.healthColorArray[2]),
-							FlxColor.fromRGB(who2.healthColorArray[0], who2.healthColorArray[1], who2.healthColorArray[2]));
-						case '1,2':
-							healthBar.createFilledBar(FlxColor.fromRGB(who.healthColorArray[0], who.healthColorArray[1], who.healthColorArray[2]),
-							FlxColor.fromRGB(who2.healthColorArray[0], who2.healthColorArray[1], who2.healthColorArray[2]));
-		
-							healthBarMiddle.createFilledBar(FlxColor.fromRGB(who.healthColorArray[0], who.healthColorArray[1], who.healthColorArray[2]),
-							FlxColor.fromRGB(who2.healthColorArray[0], who2.healthColorArray[1], who2.healthColorArray[2]));
-		
-							healthBarMiddleHalf.createFilledBar(FlxColor.fromRGB(who.healthColorArrayMiddle[0], who.healthColorArrayMiddle[1], who.healthColorArrayMiddle[2]),
-							FlxColor.fromRGB(who2.healthColorArray[0], who2.healthColorArray[1], who2.healthColorArray[2]));
-		
-							healthBarBottom.createFilledBar(FlxColor.fromRGB(who.healthColorArrayMiddle[0], who.healthColorArrayMiddle[1], who.healthColorArrayMiddle[2]),
-							FlxColor.fromRGB(who2.healthColorArray[0], who2.healthColorArray[1], who2.healthColorArray[2]));
-						case '2,1':
-							healthBar.createFilledBar(FlxColor.fromRGB(who.healthColorArray[0], who.healthColorArray[1], who.healthColorArray[2]),
-							FlxColor.fromRGB(who2.healthColorArray[0], who2.healthColorArray[1], who2.healthColorArray[2]));
-		
-							healthBarMiddle.createFilledBar(FlxColor.fromRGB(who.healthColorArray[0], who.healthColorArray[1], who.healthColorArray[2]),
-							FlxColor.fromRGB(who2.healthColorArray[0], who2.healthColorArray[1], who2.healthColorArray[2]));
-		
-							healthBarMiddleHalf.createFilledBar(FlxColor.fromRGB(who.healthColorArray[0], who.healthColorArray[1], who.healthColorArray[2]),
-							FlxColor.fromRGB(who2.healthColorArrayMiddle[0], who2.healthColorArrayMiddle[1], who2.healthColorArrayMiddle[2]));
-		
-							healthBarBottom.createFilledBar(FlxColor.fromRGB(who.healthColorArray[0], who.healthColorArray[1], who.healthColorArray[2]),
-							FlxColor.fromRGB(who2.healthColorArrayMiddle[0], who2.healthColorArrayMiddle[1], who2.healthColorArrayMiddle[2]));
-						case '3,1':
-							healthBar.createFilledBar(FlxColor.fromRGB(who.healthColorArray[0], who.healthColorArray[1], who.healthColorArray[2]),
-							FlxColor.fromRGB(who2.healthColorArray[0], who2.healthColorArray[1], who2.healthColorArray[2]));
-		
-							healthBarMiddle.createFilledBar(FlxColor.fromRGB(who.healthColorArray[0], who.healthColorArray[1], who.healthColorArray[2]),
-							FlxColor.fromRGB(who2.healthColorArrayMiddle[0], who2.healthColorArrayMiddle[1], who2.healthColorArrayMiddle[2]));
-		
-							healthBarMiddleHalf.createFilledBar(FlxColor.fromRGB(who.healthColorArray[0], who.healthColorArray[1], who.healthColorArray[2]),
-							FlxColor.fromRGB(who2.healthColorArrayMiddle[0], who2.healthColorArrayMiddle[1], who2.healthColorArrayMiddle[2]));
-		
-							healthBarBottom.createFilledBar(FlxColor.fromRGB(who.healthColorArray[0], who.healthColorArray[1], who.healthColorArray[2]),
-							FlxColor.fromRGB(who2.healthColorArrayBottom[0], who2.healthColorArrayBottom[1], who2.healthColorArrayBottom[2]));
-						case '1,3':
-							healthBar.createFilledBar(FlxColor.fromRGB(who.healthColorArray[0], who.healthColorArray[1], who.healthColorArray[2]),
-							FlxColor.fromRGB(who2.healthColorArray[0], who2.healthColorArray[1], who2.healthColorArray[2]));
-		
-							healthBarMiddle.createFilledBar(FlxColor.fromRGB(who.healthColorArrayMiddle[0], who.healthColorArrayMiddle[1], who.healthColorArrayMiddle[2]),
-							FlxColor.fromRGB(who2.healthColorArray[0], who2.healthColorArray[1], who2.healthColorArray[2]));
-		
-							healthBarMiddleHalf.createFilledBar(FlxColor.fromRGB(who.healthColorArrayMiddle[0], who.healthColorArrayMiddle[1], who.healthColorArrayMiddle[2]),
-							FlxColor.fromRGB(who2.healthColorArray[0], who2.healthColorArray[1], who2.healthColorArray[2]));
-		
-							healthBarBottom.createFilledBar(FlxColor.fromRGB(who.healthColorArrayBottom[0], who.healthColorArrayBottom[1], who.healthColorArrayBottom[2]),
-							FlxColor.fromRGB(who2.healthColorArray[0], who2.healthColorArray[1], who2.healthColorArray[2]));
-						case '2,2':
-							healthBar.createFilledBar(FlxColor.fromRGB(who.healthColorArray[0], who.healthColorArray[1], who.healthColorArray[2]),
-							FlxColor.fromRGB(who2.healthColorArray[0], who2.healthColorArray[1], who2.healthColorArray[2]));
-		
-							healthBarMiddle.createFilledBar(FlxColor.fromRGB(who.healthColorArray[0], who.healthColorArray[1], who.healthColorArray[2]),
-							FlxColor.fromRGB(who2.healthColorArray[0], who2.healthColorArray[1], who2.healthColorArray[2]));
-		
-							healthBarMiddleHalf.createFilledBar(FlxColor.fromRGB(who.healthColorArrayMiddle[0], who.healthColorArrayMiddle[1], who.healthColorArrayMiddle[2]),
-							FlxColor.fromRGB(who2.healthColorArrayMiddle[0], who2.healthColorArrayMiddle[1], who2.healthColorArrayMiddle[2]));
-		
-							healthBarBottom.createFilledBar(FlxColor.fromRGB(who.healthColorArrayMiddle[0], who.healthColorArrayMiddle[1], who.healthColorArrayMiddle[2]),
-							FlxColor.fromRGB(who2.healthColorArrayMiddle[0], who2.healthColorArrayMiddle[1], who2.healthColorArrayMiddle[2]));
-						case '2,3':
-							healthBar.createFilledBar(FlxColor.fromRGB(who.healthColorArray[0], who.healthColorArray[1], who.healthColorArray[2]),
-							FlxColor.fromRGB(who2.healthColorArray[0], who2.healthColorArray[1], who2.healthColorArray[2]));
-		
-							healthBarMiddle.createFilledBar(FlxColor.fromRGB(who.healthColorArrayMiddle[0], who.healthColorArrayMiddle[1], who.healthColorArrayMiddle[2]),
-							FlxColor.fromRGB(who2.healthColorArray[0], who2.healthColorArray[1], who2.healthColorArray[2]));
-		
-							healthBarMiddleHalf.createFilledBar(FlxColor.fromRGB(who.healthColorArrayMiddle[0], who.healthColorArrayMiddle[1], who.healthColorArrayMiddle[2]),
-							FlxColor.fromRGB(who2.healthColorArrayMiddle[0], who2.healthColorArrayMiddle[1], who2.healthColorArrayMiddle[2]));
-		
-							healthBarBottom.createFilledBar(FlxColor.fromRGB(who.healthColorArrayBottom[0], who.healthColorArrayBottom[1], who.healthColorArrayBottom[2]),
-							FlxColor.fromRGB(who2.healthColorArrayMiddle[0], who2.healthColorArrayMiddle[1], who2.healthColorArrayMiddle[2]));
-						case '3,2':
-							healthBar.createFilledBar(FlxColor.fromRGB(who.healthColorArray[0], who.healthColorArray[1], who.healthColorArray[2]),
-							FlxColor.fromRGB(who2.healthColorArray[0], who2.healthColorArray[1], who2.healthColorArray[2]));
-		
-							healthBarMiddle.createFilledBar(FlxColor.fromRGB(who.healthColorArray[0], who.healthColorArray[1], who.healthColorArray[2]),
-							FlxColor.fromRGB(who2.healthColorArrayMiddle[0], who2.healthColorArrayMiddle[1], who2.healthColorArrayMiddle[2]));
-		
-							healthBarMiddleHalf.createFilledBar(FlxColor.fromRGB(who.healthColorArrayMiddle[0], who.healthColorArrayMiddle[1], who.healthColorArrayMiddle[2]),
-							FlxColor.fromRGB(who2.healthColorArrayMiddle[0], who2.healthColorArrayMiddle[1], who2.healthColorArrayMiddle[2]));
-		
-							healthBarBottom.createFilledBar(FlxColor.fromRGB(who.healthColorArrayMiddle[0], who.healthColorArrayMiddle[1], who.healthColorArrayMiddle[2]),
-							FlxColor.fromRGB(who2.healthColorArrayBottom[0], who2.healthColorArrayBottom[1], who2.healthColorArrayBottom[2]));
-						case '3,3':
-							healthBar.createFilledBar(FlxColor.fromRGB(who.healthColorArray[0], who.healthColorArray[1], who.healthColorArray[2]),
-							FlxColor.fromRGB(who2.healthColorArray[0], who2.healthColorArray[1], who2.healthColorArray[2]));
-							
-							healthBarMiddle.createFilledBar(FlxColor.fromRGB(who.healthColorArrayMiddle[0], who.healthColorArrayMiddle[1], who.healthColorArrayMiddle[2]),
-							FlxColor.fromRGB(who2.healthColorArrayMiddle[0], who2.healthColorArrayMiddle[1], who2.healthColorArrayMiddle[2]));
-		
-							healthBarMiddleHalf.createFilledBar(FlxColor.fromRGB(who.healthColorArrayMiddle[0], who.healthColorArrayMiddle[1], who.healthColorArrayMiddle[2]),
-							FlxColor.fromRGB(who2.healthColorArrayMiddle[0], who2.healthColorArrayMiddle[1], who2.healthColorArrayMiddle[2]));
-		
-							healthBarBottom.createFilledBar(FlxColor.fromRGB(who.healthColorArrayBottom[0], who.healthColorArrayBottom[1], who.healthColorArrayBottom[2]),
-							FlxColor.fromRGB(who2.healthColorArrayBottom[0], who2.healthColorArrayBottom[1], who2.healthColorArrayBottom[2]));
+					var loopCounter:Int = 0;
+					for (bar in healthBars) {
+						bar.createFilledBar(whoColors[loopCounter], who2Colors[loopCounter]);
+						loopCounter++;
 					}
 				} else /*failsafe for null hp bar counts*/ {
 					healthBar.createFilledBar(0xFFFF0000, 0xFF66FF33);
 	
-					healthBarMiddle.createFilledBar(0xFFFF0000, 0xFF66FF33);
+					healthBarMiddle.createFilledBar(0xFFCE0000, 0xFF56D62C);
 	
-					healthBarMiddleHalf.createFilledBar(0xFFFF0000, 0xFF66FF33);
+					healthBarMiddleHalf.createFilledBar(0xFFA70303, 0xFF43A722);
 	
-					healthBarBottom.createFilledBar(0xFFFF0000, 0xFF66FF33);
+					healthBarBottom.createFilledBar(0xFF770202, 0xFF337C1B);
 				}
 		}
 		else //og healthbar colours
@@ -3863,6 +3878,14 @@ class PlayState extends MusicBeatState
 		}
 	}
 
+	if (poison) {
+		if (poisonMult == 0) {
+			iconP1Poison.visible = false;
+		}
+		var fps:Float = Main.fpsVar.currentFPS;
+		health -= (0.0066666666666667 * poisonMult)*240/fps; //lose 0.06 per second
+	}
+
 	if(updateTime) {
 					var curTime:Float = Conductor.songPosition - ClientPrefs.noteOffset;
 					if(curTime < 0) curTime = 0;
@@ -4387,18 +4410,22 @@ class PlayState extends MusicBeatState
 		{
 			case 'Old':
 				iconP1.setGraphicSize(Std.int(FlxMath.lerp(150, iconP1.width, 0.50)));
+				iconP1Poison.setGraphicSize(Std.int(FlxMath.lerp(150, iconP1.width, 0.50)));
 				iconP2.setGraphicSize(Std.int(FlxMath.lerp(150, iconP2.width, 0.50)));
 				iconP4.setGraphicSize(Std.int(FlxMath.lerp(115, iconP4.width, 0.50)));
 
 				iconP1.updateHitbox();
+				iconP1Poison.updateHitbox();
 				iconP2.updateHitbox();
 				iconP4.updateHitbox();
 			case 'Stretch':
 				iconP1.setGraphicSize(Std.int(FlxMath.lerp(150, iconP1.width, 0.8)),Std.int(FlxMath.lerp(150, iconP1.height, 0.8)));
+				iconP1Poison.setGraphicSize(Std.int(FlxMath.lerp(150, iconP1.width, 0.8)),Std.int(FlxMath.lerp(150, iconP1.height, 0.8)));
 				iconP2.setGraphicSize(Std.int(FlxMath.lerp(150, iconP2.width, 0.8)),Std.int(FlxMath.lerp(150, iconP2.height, 0.8)));
 				iconP4.setGraphicSize(Std.int(FlxMath.lerp(115, iconP4.width, 0.8)),Std.int(FlxMath.lerp(115, iconP4.height, 0.8)));
 		
 				iconP1.updateHitbox();
+				iconP1Poison.updateHitbox();
 				iconP2.updateHitbox();
 				iconP4.updateHitbox();
 			case 'Squish' | 'Swing Mild' | 'Angle Snap':
@@ -4407,6 +4434,10 @@ class PlayState extends MusicBeatState
 				var mult:Float = FlxMath.lerp(1, iconP1.scale.x, CoolUtil.boundTo(1 - (elapsed * 9), 0, 1));
 				iconP1.scale.set(mult, mult);
 				iconP1.updateHitbox();
+
+				var mult:Float = FlxMath.lerp(1, iconP1Poison.scale.x, CoolUtil.boundTo(1 - (elapsed * 9), 0, 1));
+				iconP1Poison.scale.set(mult, mult);
+				iconP1Poison.updateHitbox();
 		
 				var mult:Float = FlxMath.lerp(1, iconP2.scale.x, CoolUtil.boundTo(1 - (elapsed * 9), 0, 1));
 				iconP2.scale.set(mult, mult);
@@ -4420,6 +4451,7 @@ class PlayState extends MusicBeatState
 		var iconOffset:Int = 26;
 
 		iconP1.x = healthBar.x + (healthBar.width * (FlxMath.remapToRange(healthBar.percent, 0, 100, 100, 0) * 0.01)) + (150 * iconP1.scale.x - 150) / 2 - iconOffset;
+		iconP1Poison.x = healthBar.x + (healthBar.width * (FlxMath.remapToRange(healthBar.percent, 0, 100, 100, 0) * 0.01)) + (150 * iconP1Poison.scale.x - 150) / 2 - iconOffset;
 		iconP2.x = healthBar.x + (healthBar.width * (FlxMath.remapToRange(healthBar.percent, 0, 100, 100, 0) * 0.01)) - (150 * iconP2.scale.x) / 2 - iconOffset * 2;
 		iconP4.x = healthBar.x + ((healthBar.width * (FlxMath.remapToRange(healthBar.percent, 0, 100, 100, 0) * 0.01)) - (150 * iconP4.scale.x) / 2 - iconOffset * 2) - 80;
 
@@ -4431,6 +4463,9 @@ class PlayState extends MusicBeatState
 			lastHealth = health;
 			recalculateIconAnimations();
 		}
+
+		//not optimized! hell yeah!
+		if (ClientPrefs.scoreDisplay == 'FNF+') sarvRightTxt.text = 'HP\n' + healthBar.percent + '%\n\nACCURACY\n' + Highscore.floorDecimal(ratingPercent * 100, 2) + '%\n\nSCORE\n' + songScore;
 
 		if (FlxG.keys.anyJustPressed(debugKeysCharacter) && !endingSong && !inCutscene) {
 			persistentUpdate = false;
@@ -4479,6 +4514,7 @@ class PlayState extends MusicBeatState
 		//we dont need to watch most of these
 		FlxG.watch.addQuick("beatShit", curBeat);
 		FlxG.watch.addQuick("stepShit", curStep);
+		FlxG.watch.addQuick("poison???", iconP1Poison.visible);
 		//FlxG.watch.addQuick("flinchShit", flinching);
 		//FlxG.watch.addQuick("elapsedShit", elapsedtime);
 		//FlxG.watch.addQuick("DSupdateShit", discordUpdateTime);
@@ -5060,6 +5096,7 @@ class PlayState extends MusicBeatState
 							boyfriend = boyfriendMap.get(value2);
 							boyfriend.alpha = lastAlpha;
 							iconP1.changeIcon(boyfriend.healthIcon);
+							iconP1Poison.changeIcon(boyfriend.healthIcon);
 						}
 						setOnLuas('boyfriendName', boyfriend.curCharacter);
 						reloadHealthBarColors(false);
@@ -5544,76 +5581,6 @@ class PlayState extends MusicBeatState
 							});
 						}
 				}
-
-			case 'BM:Icon Bop':
-				iconP1.scale.set(1.2, 1.2);
-				iconP2.scale.set(1.2, 1.2);
-				iconP4.scale.set(1, 1);
-		
-				iconP1.updateHitbox();
-				iconP2.updateHitbox();
-				iconP4.updateHitbox();
-
-			case 'BM:Icon Snap':
-				if (swingDirection) {
-						iconP1.scale.set(1.1, 0.8);
-						iconP2.scale.set(1.1, 1.3);
-						iconP4.scale.set(0.85, 1.1);
-		
-						iconP1.angle = -15;
-						iconP2.angle = 15;
-						iconP4.angle = 15;
-						swingDirection = false;
-					} else {
-						iconP1.scale.set(1.1, 1.3);
-						iconP2.scale.set(1.1, 0.8);
-						iconP4.scale.set(0.85, 0.65);
-		
-						iconP2.angle = -15;
-						iconP4.angle = -15;
-						iconP1.angle = 15;
-						swingDirection = true;
-					}
-		
-					FlxTween.tween(iconP1, {'scale.x': 1, 'scale.y': 1}, Conductor.crochet / 1250 * gfSpeed, {ease: FlxEase.quadOut});
-					FlxTween.tween(iconP2, {'scale.x': 1, 'scale.y': 1}, Conductor.crochet / 1250 * gfSpeed, {ease: FlxEase.quadOut});
-					FlxTween.tween(iconP4, {'scale.x': 0.75, 'scale.y': 0.75}, Conductor.crochet / 1250 * gfSpeed, {ease: FlxEase.quadOut});
-		
-					iconP1.updateHitbox();
-					iconP2.updateHitbox();
-					iconP4.updateHitbox();
-			
-			case 'BM:Icon Swing':
-				if (swingDirection) {
-						iconP1.scale.set(1.1, 0.8);
-						iconP2.scale.set(1.1, 1.3);
-						iconP4.scale.set(0.85, 1.1);
-		
-						FlxTween.angle(iconP1, -15, 0, Conductor.crochet / 1300 * gfSpeed, {ease: FlxEase.quadOut});
-						FlxTween.angle(iconP2, 15, 0, Conductor.crochet / 1300 * gfSpeed, {ease: FlxEase.quadOut});
-						FlxTween.angle(iconP4, 15, 0, Conductor.crochet / 1300 * gfSpeed, {ease: FlxEase.quadOut});
-						swingDirection = false;
-					} else {
-						iconP1.scale.set(1.1, 1.3);
-						iconP2.scale.set(1.1, 0.8);
-						iconP4.scale.set(0.85, 0.65);
-		
-						FlxTween.angle(iconP2, -15, 0, Conductor.crochet / 1300 * gfSpeed, {ease: FlxEase.quadOut});
-						FlxTween.angle(iconP4, -15, 0, Conductor.crochet / 1300 * gfSpeed, {ease: FlxEase.quadOut});
-						FlxTween.angle(iconP1, 15, 0, Conductor.crochet / 1300 * gfSpeed, {ease: FlxEase.quadOut});
-						swingDirection = true;
-					}
-		
-					FlxTween.tween(iconP1, {'scale.x': 1, 'scale.y': 1}, Conductor.crochet / 1250 * gfSpeed, {ease: FlxEase.quadOut});
-					FlxTween.tween(iconP2, {'scale.x': 1, 'scale.y': 1}, Conductor.crochet / 1250 * gfSpeed, {ease: FlxEase.quadOut});
-					FlxTween.tween(iconP4, {'scale.x': 0.75, 'scale.y': 0.75}, Conductor.crochet / 1250 * gfSpeed, {ease: FlxEase.quadOut});
-		
-					iconP1.updateHitbox();
-					iconP2.updateHitbox();
-					iconP4.updateHitbox();
-
-			case 'BM:Stage':
-			
 		}
 		callOnLuas('onEvent', [eventName, value1, value2]);
 	}
@@ -5680,22 +5647,22 @@ class PlayState extends MusicBeatState
 		}*/
 		if (SONG.notes[id].player4Section) {
 			/*switch (hudIsSwapped) {
-				case true:*/
+				case true:
 					if (iconP1 != null && iconP4 != null && iconP2 != null) {
 						iconP4.changeIcon(dad.healthIcon);
 						iconP1.changeIcon(player4.healthIcon);
 						iconP2.changeIcon(boyfriend.healthIcon);
 						reloadHealthBarColors(true);
 						recalculateIconAnimations();
-					}
-				/*case false:
+					}*/
+				//case false:
 					if (iconP2 != null && iconP4 != null) {
 						iconP4.changeIcon(dad.healthIcon);
 						iconP2.changeIcon(player4.healthIcon);
 						reloadHealthBarColors(true);
 						recalculateIconAnimations();
 					}
-			}*/
+			//}
 		}
 	}
 
@@ -6983,12 +6950,16 @@ class PlayState extends MusicBeatState
 				combo = 0;
 		
 				if(ClientPrefs.flinchy) {
+					var time:Float = 0.5;
 					flinching = true;
 					recalculateIconAnimations();
 					if (flinchTimer != null) {
 						flinchTimer.cancel();
 					}
-					flinchTimer = new FlxTimer().start(0.5, function(tmr:FlxTimer)
+					if (poison) {
+						time = 3;
+					}
+					flinchTimer = new FlxTimer().start(time, function(tmr:FlxTimer)
 					{
 						flinching = false;
 						recalculateIconAnimations();	
@@ -6999,6 +6970,23 @@ class PlayState extends MusicBeatState
 					maxHealth -= 0.10;
 				}
 				health -= daNote.missHealth * healthLoss;
+				poisonMult += 0.038;
+				if (poisonSprite.alpha < 1 && poison) FlxTween.tween(poisonSprite, {alpha: 1}, 0.2);
+				if (poisonTimer != null) {
+					poisonTimer.cancel();
+					poisonTimer = null;
+				}
+				poisonTimer = new FlxTimer().start(3, function(tmr:FlxTimer) {
+					poisonMult = 0;
+					if(!ClientPrefs.hideHud) iconP1Poison.visible = false;
+					recalculateIconAnimations();
+					if (SONG.notes[Std.int(curStep / 16)].player4Section) {
+						reloadHealthBarColors(true);
+					} else {
+						reloadHealthBarColors(false);
+					}
+					FlxTween.tween(poisonSprite, {alpha: 0}, 0.2);
+				});
 				if(instakillOnMiss)
 				{
 					vocals.volume = 0;
@@ -7046,12 +7034,16 @@ class PlayState extends MusicBeatState
 				combo = 0;
 		
 				if(ClientPrefs.flinchy) {
+					var time:Float = 0.5;
 					flinching = true;
 					recalculateIconAnimations();
 					if (flinchTimer != null) {
 						flinchTimer.cancel();
 					}
-					flinchTimer = new FlxTimer().start(0.5, function(tmr:FlxTimer)
+					if (poison) {
+						time = 3;
+					}
+					flinchTimer = new FlxTimer().start(time, function(tmr:FlxTimer)
 					{
 						flinching = false;
 						recalculateIconAnimations();	
@@ -7062,6 +7054,23 @@ class PlayState extends MusicBeatState
 					maxHealth -= 0.10;
 				}
 				health -= daNote.missHealth * healthLoss;
+				poisonMult += 0.038;
+				if (poisonSprite.alpha < 1 && poison) FlxTween.tween(poisonSprite, {alpha: 1}, 0.2);
+				if (poisonTimer != null) {
+					poisonTimer.cancel();
+					poisonTimer = null;
+				}
+				poisonTimer = new FlxTimer().start(3, function(tmr:FlxTimer) {
+					poisonMult = 0;
+					if(!ClientPrefs.hideHud) iconP1Poison.visible = false;
+					recalculateIconAnimations();
+					if (SONG.notes[Std.int(curStep / 16)].player4Section) {
+						reloadHealthBarColors(true);
+					} else {
+						reloadHealthBarColors(false);
+					}
+					FlxTween.tween(poisonSprite, {alpha: 0}, 0.2);
+				});
 				if(instakillOnMiss)
 				{
 					vocals.volume = 0;
@@ -7600,10 +7609,19 @@ class PlayState extends MusicBeatState
 			}
 			health += note.hitHealth * healthGain;
 
-			if (flinching){
-				flinching = false;
-				if (flinchTimer != null) flinchTimer.cancel();
-				recalculateIconAnimations();
+			if (!poison) {
+				if (flinching){
+					flinching = false;
+					if (flinchTimer != null) flinchTimer.cancel();
+					recalculateIconAnimations();
+				}
+			} else {
+				if (flinching && poisonMult == 0){
+					flinching = false;
+					iconP1Poison.visible = false;
+					if (flinchTimer != null) flinchTimer.cancel();
+					recalculateIconAnimations();
+				}
 			}
 
 			if(!note.noAnimation) {
@@ -8016,8 +8034,6 @@ class PlayState extends MusicBeatState
 		switch (SONG.song.toLowerCase()) {
 			case 'guns':
 				switch (curStep) {
-					//case 890:
-						//addBehindDad(gunsThing);
 					case 896:
 						tankmanRainbow = true;
 						raiseTankman = true;
@@ -8144,27 +8160,33 @@ class PlayState extends MusicBeatState
 			if (curBeat % gfSpeed == 0) {
 				curBeat % (gfSpeed * 2) == 0 ? {
 					iconP1.scale.set(1.1, 0.8);
+					iconP1Poison.scale.set(1.1, 0.8);
 					iconP2.scale.set(1.1, 1.3);
 					iconP4.scale.set(0.85, 1.1);
 	
 					FlxTween.angle(iconP1, -15, 0, Conductor.crochet / 1300 * gfSpeed, {ease: FlxEase.quadOut});
+					FlxTween.angle(iconP1Poison, -15, 0, Conductor.crochet / 1300 * gfSpeed, {ease: FlxEase.quadOut});
 					FlxTween.angle(iconP2, 15, 0, Conductor.crochet / 1300 * gfSpeed, {ease: FlxEase.quadOut});
 					FlxTween.angle(iconP4, 15, 0, Conductor.crochet / 1300 * gfSpeed, {ease: FlxEase.quadOut});
 				} : {
 					iconP1.scale.set(1.1, 1.3);
+					iconP1Poison.scale.set(1.1, 1.3);
 					iconP2.scale.set(1.1, 0.8);
 					iconP4.scale.set(0.85, 0.65);
 	
 					FlxTween.angle(iconP2, -15, 0, Conductor.crochet / 1300 * gfSpeed, {ease: FlxEase.quadOut});
 					FlxTween.angle(iconP4, -15, 0, Conductor.crochet / 1300 * gfSpeed, {ease: FlxEase.quadOut});
 					FlxTween.angle(iconP1, 15, 0, Conductor.crochet / 1300 * gfSpeed, {ease: FlxEase.quadOut});
+					FlxTween.angle(iconP1Poison, 15, 0, Conductor.crochet / 1300 * gfSpeed, {ease: FlxEase.quadOut});
 				}
 	
 				FlxTween.tween(iconP1, {'scale.x': 1, 'scale.y': 1}, Conductor.crochet / 1250 * gfSpeed, {ease: FlxEase.quadOut});
+				FlxTween.tween(iconP1Poison, {'scale.x': 1, 'scale.y': 1}, Conductor.crochet / 1250 * gfSpeed, {ease: FlxEase.quadOut});
 				FlxTween.tween(iconP2, {'scale.x': 1, 'scale.y': 1}, Conductor.crochet / 1250 * gfSpeed, {ease: FlxEase.quadOut});
 				FlxTween.tween(iconP4, {'scale.x': 0.75, 'scale.y': 0.75}, Conductor.crochet / 1250 * gfSpeed, {ease: FlxEase.quadOut});
 	
 				iconP1.updateHitbox();
+				iconP1Poison.updateHitbox();
 				iconP2.updateHitbox();
 				iconP4.updateHitbox();
 			}
@@ -8172,100 +8194,89 @@ class PlayState extends MusicBeatState
 				if (curBeat % gfSpeed == 0) {
 					curBeat % (gfSpeed * 2) == 0 ? {
 						iconP1.scale.set(1.3, 0.3);
+						iconP1Poison.scale.set(1.3, 0.3);
 						iconP2.scale.set(0.3, 1.7);
 						iconP4.scale.set(0.265, 1.4);
 					} : {
 						iconP1.scale.set(0.3, 1.3);
+						iconP1Poison.scale.set(0.3, 1.3);
 						iconP2.scale.set(1.3, 0.3);
 						iconP4.scale.set(1.1, 0.265);
 					}
 		
 					FlxTween.tween(iconP1, {'scale.x': 1, 'scale.y': 1}, Conductor.crochet / 1250 * gfSpeed, {ease: FlxEase.quadOut});
+					FlxTween.tween(iconP1Poison, {'scale.x': 1, 'scale.y': 1}, Conductor.crochet / 1250 * gfSpeed, {ease: FlxEase.quadOut});
 					FlxTween.tween(iconP2, {'scale.x': 1, 'scale.y': 1}, Conductor.crochet / 1250 * gfSpeed, {ease: FlxEase.quadOut});
 					FlxTween.tween(iconP4, {'scale.x': 0.75, 'scale.y': 0.75}, Conductor.crochet / 1250 * gfSpeed, {ease: FlxEase.quadOut});
 		
 					iconP1.updateHitbox();
+					iconP1Poison.updateHitbox();
 					iconP2.updateHitbox();
 					iconP4.updateHitbox();
 				}
 			case 'Bop Mild':
 				iconP1.scale.set(1.2, 1.2);
+				iconP1Poison.scale.set(1.2, 1.2);
 				iconP2.scale.set(1.2, 1.2);
 				iconP4.scale.set(1, 1);
 		
 				iconP1.updateHitbox();
+				iconP1Poison.updateHitbox();
 				iconP2.updateHitbox();
 				iconP4.updateHitbox();
-			case 'Vanilla':
+			case 'Vanilla' | 'Old':
 				iconP1.setGraphicSize(Std.int(iconP1.width + 30));
+				iconP1Poison.setGraphicSize(Std.int(iconP1.width + 30));
 				iconP2.setGraphicSize(Std.int(iconP2.width + 30));
 				iconP4.setGraphicSize(Std.int(iconP4.width + 30));
 		
 				iconP1.updateHitbox();
+				iconP1Poison.updateHitbox();
 				iconP2.updateHitbox();
 				iconP4.updateHitbox();
-			case 'Grow':
-			//var funny:Float = (healthBar.percent * 0.01) + 0.01;
-
-			if (healthBar.percent > 80) {
-				FlxTween.tween(iconP1, {'scale.x': 1, 'scale.y': 1.1}, Conductor.crochet / 1250 * gfSpeed, {ease: FlxEase.quadOut});
-				FlxTween.tween(iconP2, {'scale.x': 1, 'scale.y': 0.2}, Conductor.crochet / 1250 * gfSpeed, {ease: FlxEase.quadOut});
-			} else if (healthBar.percent < 20) {
-				FlxTween.tween(iconP1, {'scale.x': 1, 'scale.y': 0.2}, Conductor.crochet / 1250 * gfSpeed, {ease: FlxEase.quadOut});
-				FlxTween.tween(iconP2, {'scale.x': 1, 'scale.y': 1.1}, Conductor.crochet / 1250 * gfSpeed, {ease: FlxEase.quadOut});
-			} else {
-				FlxTween.tween(iconP1, {'scale.x': 1.1, 'scale.y': 1.1}, Conductor.crochet / 1250 * gfSpeed, {ease: FlxEase.quadOut});
-				FlxTween.tween(iconP2, {'scale.x': 1.1, 'scale.y': 1.1}, Conductor.crochet / 1250 * gfSpeed, {ease: FlxEase.quadOut});
-			}
-			//health icon bounce but epic
-			//iconP1.setGraphicSize(Std.int(iconP1.width + (50 * funny)),Std.int(iconP2.height - (25 * funny)));
-			//iconP2.setGraphicSize(Std.int(iconP2.width + (50 * (2 - funny))),Std.int(iconP2.height - (25 * (2 - funny))));
-	
-			iconP1.updateHitbox();
-			iconP2.updateHitbox();
 			case 'Angle Snap':
 				if (curBeat % gfSpeed == 0) {
 					curBeat % (gfSpeed * 2) == 0 ? {
 						iconP1.scale.set(1.1, 0.8);
+						iconP1Poison.scale.set(1.1, 0.8);
 						iconP2.scale.set(1.1, 1.3);
 						iconP4.scale.set(0.85, 1.1);
 		
 						iconP1.angle = -15;
+						iconP1Poison.angle = -15;
 						iconP2.angle = 15;
 						iconP4.angle = 15;
 					} : {
 						iconP1.scale.set(1.1, 1.3);
+						iconP1Poison.scale.set(1.1, 1.3);
 						iconP2.scale.set(1.1, 0.8);
 						iconP4.scale.set(0.85, 0.65);
 		
 						iconP2.angle = -15;
 						iconP4.angle = -15;
 						iconP1.angle = 15;
+						iconP1Poison.angle = 15;
 					}
 		
 					FlxTween.tween(iconP1, {'scale.x': 1, 'scale.y': 1}, Conductor.crochet / 1250 * gfSpeed, {ease: FlxEase.quadOut});
+					FlxTween.tween(iconP1Poison, {'scale.x': 1, 'scale.y': 1}, Conductor.crochet / 1250 * gfSpeed, {ease: FlxEase.quadOut});
 					FlxTween.tween(iconP2, {'scale.x': 1, 'scale.y': 1}, Conductor.crochet / 1250 * gfSpeed, {ease: FlxEase.quadOut});
 					FlxTween.tween(iconP4, {'scale.x': 0.75, 'scale.y': 0.75}, Conductor.crochet / 1250 * gfSpeed, {ease: FlxEase.quadOut});
 		
 					iconP1.updateHitbox();
+					iconP1Poison.updateHitbox();
 					iconP2.updateHitbox();
 					iconP4.updateHitbox();
 				}
-			case 'Old':
-				iconP1.setGraphicSize(Std.int(iconP1.width + 30));
-				iconP2.setGraphicSize(Std.int(iconP2.width + 30));
-				iconP4.setGraphicSize(Std.int(iconP4.width + 30));
-		
-				iconP1.updateHitbox();
-				iconP2.updateHitbox();
-				iconP4.updateHitbox();
 			case 'Stretch':
 				var funny:Float = (healthBar.percent * 0.01) + 0.01;
 				iconP1.setGraphicSize(Std.int(iconP1.width + (50 * funny)),Std.int(iconP2.height - (25 * funny)));
+				iconP1Poison.setGraphicSize(Std.int(iconP1.width + (50 * funny)),Std.int(iconP2.height - (25 * funny)));
 				iconP2.setGraphicSize(Std.int(iconP2.width + (50 * (2 - funny))),Std.int(iconP2.height - (25 * (2 - funny))));
 				iconP4.setGraphicSize(Std.int(iconP4.width + (25 * (2 - funny))),Std.int(iconP4.height - (12 * (2 - funny))));
 		
 				iconP1.updateHitbox();
+				iconP1Poison.updateHitbox();
 				iconP2.updateHitbox();
 				iconP4.updateHitbox();
 			case 'None':
@@ -8577,10 +8588,20 @@ class PlayState extends MusicBeatState
 				deathTxt.text = '';
 				sarvRightTxt.text = '';
 				sarvAccuracyTxt.text = '';
+			case 'FNF+':
+				scoreTxt.text = '';
+				deathTxt.text = '';
+				sarvRightTxt.text = 'HP\n' + healthBar.percent + '%\n\nACCURACY\n' + Highscore.floorDecimal(ratingPercent * 100, 2) + '%\n\nSCORE\n' + songScore;
+				sarvAccuracyTxt.text = '';
 			case 'Vanilla':
 				scoreTxt.text = '';
 				deathTxt.text = '';
 				sarvRightTxt.text = 'Score:' + songScore;
+				sarvAccuracyTxt.text = '';
+			case 'FNM':
+				scoreTxt.text = '';
+				deathTxt.text = '';
+				sarvRightTxt.text = 'score:' + songScore;
 				sarvAccuracyTxt.text = '';
 			case 'None':
 				scoreTxt.text = '';
@@ -8596,25 +8617,41 @@ class PlayState extends MusicBeatState
 
 	public function recalculateIconAnimations() {
 		if (flinching){
+			if (poison) {
+				if(!ClientPrefs.hideHud) iconP1Poison.visible = true;
+				if (SONG.notes[Std.int(curStep / 16)].player4Section) {
+					reloadHealthBarColors(true, null, true);
+				} else {
+					reloadHealthBarColors(false, null, true);
+				}
+			}
 			iconP1.animation.curAnim.curFrame = 1;
+			iconP1Poison.animation.curAnim.curFrame = 1;
 		}
 		else
 		{
 			if (ClientPrefs.winningicons && iconP1.getFileName().endsWith('-winning'))
 			{
-				if (healthBar.percent < 20)
+				if (healthBar.percent < 20) {
 					iconP1.animation.curAnim.curFrame = 1; //Losing BF
-				else if (healthBar.percent > 20 && healthBar.percent < 80)
+					iconP1Poison.animation.curAnim.curFrame = 1;
+				} else if (healthBar.percent > 20 && healthBar.percent < 80) {
 					iconP1.animation.curAnim.curFrame = 0; //Neutral BF
-				else if (healthBar.percent > 80)
+					iconP1Poison.animation.curAnim.curFrame = 0;
+				} else if (healthBar.percent > 80) {
 					iconP1.animation.curAnim.curFrame = 2; //Winning BF
+					iconP1Poison.animation.curAnim.curFrame = 2;
+				}
 			}
 			else
 			{
-				if (healthBar.percent < 20)
+				if (healthBar.percent < 20) {
 					iconP1.animation.curAnim.curFrame = 1; //Losing BF
-				else if (healthBar.percent > 20)
+					iconP1Poison.animation.curAnim.curFrame = 1;
+				} else if (healthBar.percent > 20) {
 					iconP1.animation.curAnim.curFrame = 0; //Neutral BF
+					iconP1Poison.animation.curAnim.curFrame = 0;
+				}
 			}
 		}
 
