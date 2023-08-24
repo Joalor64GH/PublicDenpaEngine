@@ -1,10 +1,11 @@
 package;
 
+import flixel.FlxCamera;
+import flixel.FlxSprite;
 import flixel.group.FlxGroup.FlxTypedGroup;
-import flixel.animation.FlxAnimation;
+import flixel.math.FlxRect;
 import flixel.tweens.FlxTween;
 import flixel.util.FlxColor;
-import flixel.FlxSprite;
 
 /**
 * Class used to create `CrossFade`s, as seen in Mid-Fight Masses.
@@ -12,22 +13,66 @@ import flixel.FlxSprite;
 */
 class CrossFade extends FlxSprite
 {
-    public function new(character:Character, group:FlxTypedGroup<CrossFade>, ?isDad:Bool = true)
-    {
+	private static var colorMap:Map<String, Array<Int>> = [
+		'gf-tutorial' => [0xFFa5004d],
+		'gf' => [0xFFa5004d],
+		'gf-pixel' => [0xFFa5004d],
+		'monster' => [0xff919400],
+		'monster-streetlight' => [0xff919400],
+		'monster-christmas' => [0xff919400],
+		'bf' => [0xFF1b008c],
+		'bf-streetlight' => [0xFF1b008c],
+		'bf-car' => [0xFF1b008c],
+		'bf-christmas' => [0xFF1b008c],
+		'bf-holding-gf' => [0xFF1b008c, 0xFFa5004d],
+		'bf-pixel' => [0xFF00368c],
+		'bf-pixel-opponent' => [0xFF00368c],
+		'pico' => [0xff2c8c00],
+		'pico-player' => [0xff2c8c00],
+		'parents-christmas' => [0xff6a3381, 0xff882952],
+		'spooky' => [0xff777777, 0xff925500],
+		'senpai' => [0xFFffaa6f],
+		'senpai-angry' => [0xFFffaa6f],
+		'sarvente' => [0xFFe32486],
+		'sarvente-dark' => [0xFFe32486],
+		'sarvente-lucifer' => [0xFFe32486],
+		'selever' => [0xFFe32486],
+		'ruv' => [0xFF2e0069],
+		'tankman' => [0xffcccccc, 0xff7c0000, 0xff7e3200, 0xff7c6900, 0xff0a7c00, 0xff00407c, 0xff13007c, 0xff63007c]
+	];
+	private var isPlayer:Bool = false;
+	private var playerOffsets:Bool = false;
+	private var flippedFlipX:Bool = false;
+
+	//these are recycled now so the new function is empty except for the super
+    public function new()
         super();
+
+	public function resetShit(character:Character, ?isDad:Bool = true) {
+		if (character.trailData.enabled) {
+			kill();
+			return;
+		}
+
+		isPlayer = character.isPlayer;
+		playerOffsets = character.playerOffsets;
+		flippedFlipX = character.flippedFlipX;
         frames = character.frames;
-		alpha = 0.3;
+		alpha = (!isDad ? ClientPrefs.settings.get('crossFadeData')[3] : 0.3);
 		setGraphicSize(Std.int(character.width), Std.int(character.height));
-		scrollFactor.set(character.scrollFactor.x,character.scrollFactor.y);
+		scrollFactor.set(character.scrollFactor.x, character.scrollFactor.y);
 		updateHitbox();
 		flipX = character.flipX;
 		flipY = character.flipY;
-		var curCrossFadeMode:String = ClientPrefs.crossFadeMode;
+		final curCrossFadeMode:String = ClientPrefs.settings.get('crossFadeData')[0];
 		switch (curCrossFadeMode)
 		{
 			case 'Static':
-				x = character.x + 60;
-				y = character.y - 50;
+				x = character.x + (isDad ? 60 : -60);
+				y = character.y - 48;
+			case 'Subtle':
+				x = character.x;
+				y = character.y;
 			case 'Eccentric':
 				x = character.x + FlxG.random.float(-20,90);
 				y = character.y + FlxG.random.float(-80, 80);
@@ -35,261 +80,67 @@ class CrossFade extends FlxSprite
 				x = character.x + FlxG.random.float(0,60);
 				y = character.y + FlxG.random.float(-50, 50);
 		}
-		offset.x = character.offset.x;
-		offset.y = character.offset.y; 
+		offset.set(character.offset.x, character.offset.y);
 		animation.add('cur', character.animation.curAnim.frames, 24, false);
 		animation.play('cur', true);
         animation.curAnim.curFrame = character.animation.curAnim.curFrame;
-		if (!character.flixelTrail) {
-			switch(character.curCharacter)
-			{
-				case 'gf-pixel':
-					color = 0xFFa5004d;
-					antialiasing = false;
-				case 'monster' | 'monster-christmas' | 'monster-streetlight':
-					color = 0xff919400;
-					antialiasing = character.antialiasing;
-				case 'bf' | 'bf-car' | 'bf-christmas' | 'bf-streetlight':
-					color = 0xFF1b008c;
-					antialiasing = character.antialiasing;
-				case 'pico' | 'pico-player':
-					color = 0xff2c8c00;
-					antialiasing = character.antialiasing;
-				case 'bf-holding-gf':
-					color = FlxG.random.bool(50) ? 0xFF1b008c : 0xFFa5004d;
-					antialiasing = character.antialiasing;
-				case 'parents-christmas':
-					color = PlayState.SONG.notes[PlayState.publicSection].altAnim ? 0xff882952 : 0xff6a3381;
-					antialiasing = character.antialiasing;
-				case 'spooky':
-					color = FlxG.random.bool(50) ? 0xff777777 : 0xff925500;
-					antialiasing = character.antialiasing;
-				case 'bf-pixel' | 'bf-pixel-opponent':
-					color = 0xFF00368c;
-					antialiasing = false;
-				case 'senpai' | 'senpai-angry':
-					color = 0xFFffaa6f;
-					antialiasing = false;
-				case 'sarvente' | 'sarvente-dark' | 'sarvente-lucifer' | 'selever':
-					color = 0xFFe32486;
-					antialiasing = character.antialiasing;
-				case 'ruv':
-					color = 0xFF2e0069;
-					antialiasing = character.antialiasing;
-				case 'tankman' | 'tankman-player':
-					if (PlayState.tankmanRainbow) {
-						switch(FlxG.random.int(0,5)) {
-							case 0:
-								color = 0xff7c0000;
-							case 1:
-								color = 0xff7e3200;
-							case 2:
-								color = 0xff7c6900;
-							case 3:
-								color = 0xff0a7c00;
-							case 4:
-								color = 0xff02007c;
-							case 5:
-								color = 0xff6d007c;
-							default:
-								color = 0xff000000;
-						}
-					} else {
-						color = 0xff000000;
-					}
-					antialiasing = character.antialiasing;
-				default:
-					color = FlxColor.fromRGB(character.healthColorArray[0], character.healthColorArray[1], character.healthColorArray[2]);
-					color = FlxColor.subtract(color, 0x00333333);
-					antialiasing = character.antialiasing;
-			}
+		//animation.copyFrom(character.animation); //might be faster?
+		antialiasing = character.antialiasing;
+
+		if (colorMap.exists(character.curCharacter)) {
+			final colors = colorMap.get(character.curCharacter);
+			var index:Int = 0;
+
+			if (character.curCharacter == 'parents-christmas')
+				index = (PlayState.SONG.notes[PlayState.instance.curSection].altAnim ? 1 : 0);
+			else if (character.curCharacter == 'spooky' || character.curCharacter == 'bf-holding-gf')
+				index = (FlxG.random.bool() ? 1 : 0);
+			else if ((character.curCharacter == 'tankman' || character.curCharacter == 'tankman-player') && PlayState.instance.tankmanRainbow)
+				index = FlxG.random.int(1, 7);
+
+			color = colors[index];
+		} else
+			color = FlxColor.subtract(FlxColor.fromRGB(character.healthColorArray[0].red, character.healthColorArray[0].green, character.healthColorArray[0].blue), 0x00333333);
+	
+		final oppositeDir = FlxG.random.bool(70); //no mor shadow wario naming wahoo
+		final velo = 12 * (curCrossFadeMode == 'Eccentric' ? 8 : 5);
+		switch (curCrossFadeMode)
+		{
+			case 'Static' | 'Subtle':
+				velocity.x = 0;
+			case 'Eccentric':
+				velocity.x = (isDad ? (oppositeDir ? -velo : velo) : (oppositeDir ? velo : -velo)) * PlayState.instance.playbackRate;
+				acceleration.x = (velocity.x > 0 ? FlxG.random.int(25,75) : FlxG.random.int(-25,-75)) * PlayState.instance.playbackRate * PlayState.instance.playbackRate;
+			default:
+				velocity.x = (isDad ? (oppositeDir ? -velo : velo) : (oppositeDir ? velo : -velo)) * PlayState.instance.playbackRate;
+				acceleration.x = (velocity.x > 0 ? FlxG.random.int(4,12) : FlxG.random.int(-4,-12)) * PlayState.instance.playbackRate * PlayState.instance.playbackRate;
+		}
+		var fadeTime = (!isDad ? ClientPrefs.settings.get('crossFadeData')[4] : 0.35);
+		FlxTween.tween(this, {alpha: 0}, FlxG.random.float(fadeTime - 0.03, fadeTime + 0.03) / PlayState.instance.playbackRate, {onComplete: _ -> kill()});
+	}
+
+	public override function getScreenBounds(?newRect:FlxRect, ?camera:FlxCamera):FlxRect {
+		if (flipDrawing) {
+			scale.x *= -1;
+			var bounds = super.getScreenBounds(newRect, camera);
+			scale.x *= -1;
+			return bounds;
+		}
+		return super.getScreenBounds(newRect, camera);
+	}
+
+	var flipDrawing:Bool = false;
+	override function draw() {
+		if ((isPlayer != playerOffsets) != (flipX != flippedFlipX)) {
+			flipDrawing = true;
+			flipX = !flipX;
+			scale.x *= -1;
+			super.draw();
+			flipX = !flipX;
+			scale.x *= -1;
+			flipDrawing = false;
 		} else {
-			alpha = 0;
-			kill();
-			destroy();
-			return;
+			super.draw();
 		}
-	
-		var fuck = FlxG.random.bool(70);
-		
-		var velo = 12 * 5;
-		switch (curCrossFadeMode)
-		{
-			case 'Static':
-				if (isDad) {
-					if (fuck) velocity.x = 0;
-					else velocity.x = 0;
-				}
-				else {
-					if (fuck) velocity.x = 0;
-					else velocity.x = 0;
-				}
-			case 'Eccentric':
-				velo = 12 * 8;
-				if (isDad) {
-					if (fuck) velocity.x = -velo;
-					else velocity.x = velo;
-				}
-				else {
-					if (fuck) velocity.x = velo;
-					else velocity.x = -velo;
-				}
-				acceleration.x = (velocity.x > 0) ? FlxG.random.int(25,75) : FlxG.random.int(-25,-75);
-			default:
-				if (isDad) {
-					if (fuck) velocity.x = -velo;
-					else velocity.x = velo;
-				}
-				else {
-					if (fuck) velocity.x = velo;
-					else velocity.x = -velo;
-				}
-				acceleration.x = (velocity.x > 0) ? FlxG.random.int(4,12) : FlxG.random.int(-4,-12);
-		}
-	
-		FlxTween.tween(this, {alpha: 0}, FlxG.random.float(0.32,0.37), {
-			onComplete: function(twn:FlxTween)
-			{
-				kill();
-				destroy();
-			}
-		});
-
-		group.add(this);
-    }
-}
-
-/**
-* Class used to create `CrossFade`s for Boyfriend.
-* All sprite creation and destruction is handled automatically.
-*/
-class BFCrossFade extends FlxSprite
-{
-    public function new(character:Character.Boyfriend, group:FlxTypedGroup<BFCrossFade>)
-    {
-        super();
-        frames = character.frames;
-		alpha = 0.3;
-		setGraphicSize(Std.int(character.width), Std.int(character.height));
-		scrollFactor.set(character.scrollFactor.x,character.scrollFactor.y);
-		updateHitbox();
-		flipX = character.flipX;
-		flipY = character.flipY;
-		var curCrossFadeMode:String = ClientPrefs.crossFadeMode;
-		switch (curCrossFadeMode)
-		{
-			case 'Static':
-				x = character.x - 60;
-				y = character.y - 50;
-			case 'Eccentric':
-				x = character.x + FlxG.random.float(-20,90);
-				y = character.y + FlxG.random.float(-80, 80);
-			default:
-				x = character.x + FlxG.random.float(0,60);
-				y = character.y + FlxG.random.float(-50, 50);
-		}
-		offset.x = character.offset.x;
-		offset.y = character.offset.y; 
-		animation.add('cur', character.animation.curAnim.frames, 24, false);
-		animation.play('cur', true);
-        animation.curAnim.curFrame = character.animation.curAnim.curFrame;
-		if (!character.flixelTrail) {
-			switch(character.curCharacter)
-			{
-				case 'gf-pixel':
-					color = 0xFFa5004d;
-					antialiasing = false;
-				case 'monster' | 'monster-christmas' | 'monster-streetlight':
-					color = 0xff919400;
-					antialiasing = character.antialiasing;
-				case 'bf' | 'bf-car' | 'bf-christmas' | 'bf-streetlight':
-					color = 0xFF1b008c;
-					antialiasing = character.antialiasing;
-				case 'pico' | 'pico-player':
-					color = 0xff2c8c00;
-					antialiasing = character.antialiasing;
-				case 'bf-holding-gf':
-					color = FlxG.random.bool(50) ? 0xFF1b008c : 0xFFa5004d;
-					antialiasing = character.antialiasing;
-				case 'parents-christmas':
-					color = PlayState.SONG.notes[PlayState.publicSection].altAnim ? 0xff882952 : 0xff6a3381;
-					antialiasing = character.antialiasing;
-				case 'spooky':
-					color = FlxG.random.bool(50) ? 0xff777777 : 0xff925500;
-					antialiasing = character.antialiasing;
-				case 'bf-pixel' | 'bf-pixel-opponent':
-					color = 0xFF00368c;
-					antialiasing = false;
-				case 'senpai' | 'senpai-angry':
-					color = 0xFFffaa6f;
-					antialiasing = false;
-				case 'sarvente' | 'sarvente-dark' | 'sarvente-lucifer' | 'selever':
-					color = 0xFFe32486;
-					antialiasing = character.antialiasing;
-				case 'ruv':
-					color = 0xFF2e0069;
-					antialiasing = character.antialiasing;
-				case 'tankman' | 'tankman-player':
-					if (PlayState.tankmanRainbow) {
-						switch(FlxG.random.int(0,5)) {
-							case 0:
-								color = 0xff7c0000;
-							case 1:
-								color = 0xff7e3200;
-							case 2:
-								color = 0xff7c6900;
-							case 3:
-								color = 0xff0a7c00;
-							case 4:
-								color = 0xff02007c;
-							case 5:
-								color = 0xff6d007c;
-							default:
-								color = 0xff000000;
-						}
-					} else {
-						color = 0xff000000;
-					}
-					antialiasing = character.antialiasing;
-				default:
-					color = FlxColor.fromRGB(character.healthColorArray[0], character.healthColorArray[1], character.healthColorArray[2]);
-					color = FlxColor.subtract(color, 0x00333333);
-					antialiasing = character.antialiasing;
-			}
-		} else {
-			alpha = 0;
-			kill();
-			destroy();
-			return;
-		}
-	
-		var fuck = FlxG.random.bool(70);
-		
-		var velo = 12 * 5;
-		switch (curCrossFadeMode)
-		{
-			case 'Static':
-				if (fuck) velocity.x = 0;
-				else velocity.x = 0;
-			case 'Eccentric':
-				velo = 12 * 8;
-				if (fuck) velocity.x = velo;
-				else velocity.x = -velo;
-				acceleration.x = (velocity.x > 0) ? FlxG.random.int(25,75) : FlxG.random.int(-25,-75);
-			default:
-				if (fuck) velocity.x = velo;
-				else velocity.x = -velo;	
-				acceleration.x = (velocity.x > 0) ? FlxG.random.int(4,12) : FlxG.random.int(-4,-12);
-		}
-	
-		FlxTween.tween(this, {alpha: 0}, FlxG.random.float(0.32,0.37), {
-			onComplete: function(twn:FlxTween)
-			{
-				kill();
-				destroy();
-			}
-		});
-
-		group.add(this);
-    }
+	}
 }

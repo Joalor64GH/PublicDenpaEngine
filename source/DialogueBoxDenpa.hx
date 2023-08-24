@@ -1,19 +1,10 @@
 package;
 
 import flixel.FlxSprite;
-import flixel.addons.text.FlxTypeText;
-import flixel.graphics.frames.FlxAtlasFrames;
 import flixel.group.FlxSpriteGroup;
-import flixel.input.FlxKeyManager;
-import flixel.text.FlxText;
 import flixel.util.FlxColor;
-import flixel.util.FlxTimer;
-import flixel.FlxSubState;
 import haxe.Json;
-import haxe.format.JsonParser;
 import openfl.utils.Assets;
-
-using StringTools;
 
 typedef DialogueCharacterFile = {
 	var image:String;
@@ -55,11 +46,7 @@ class DialogueCharacter extends FlxSprite
 	public static var DEFAULT_SCALE:Float = 0.7;
 
 	public var jsonFile:DialogueCharacterFile = null;
-	#if (haxe >= "4.0.0")
 	public var dialogueAnimations:Map<String, DialogueAnimArray> = new Map();
-	#else
-	public var dialogueAnimations:Map<String, DialogueAnimArray> = new Map<String, DialogueAnimArray>();
-	#end
 
 	public var startingPos:Float = 0; //For center characters, it works as the starting Y, for everything else it works as starting X
 	public var isGhost:Bool = false; //For the editor
@@ -77,12 +64,11 @@ class DialogueCharacter extends FlxSprite
 		frames = Paths.getSparrowAtlas('dialogue/' + jsonFile.image);
 		reloadAnimations();
 
-		antialiasing = ClientPrefs.globalAntialiasing;
 		if(jsonFile.no_antialiasing == true) antialiasing = false;
 	}
 
 	public function reloadCharacterJson(character:String) {
-		var characterPath:String = 'images/dialogue/' + character + '.json';
+		var characterPath:String = 'data/dialoguecharacters/' + character + '.json';
 		var rawJson = null;
 
 		#if MODS_ALLOWED
@@ -92,7 +78,7 @@ class DialogueCharacter extends FlxSprite
 		}
 
 		if(!FileSystem.exists(path)) {
-			path = Paths.getPreloadPath('images/dialogue/' + DEFAULT_CHARACTER + '.json');
+			path = Paths.getPreloadPath('data/dialoguecharacters/' + DEFAULT_CHARACTER + '.json');
 		}
 		rawJson = File.getContent(path);
 
@@ -200,7 +186,6 @@ class DialogueBoxDenpa extends FlxSpriteGroup
 		box = new FlxSprite(70, 370);
 		box.frames = Paths.getSparrowAtlas('speech_bubble');
 		box.scrollFactor.set();
-		box.antialiasing = ClientPrefs.globalAntialiasing;
 		box.animation.addByPrefix('normal', 'speech bubble normal', 24);
 		box.animation.addByPrefix('normalOpen', 'Speech Bubble Normal Open', 24, false);
 		box.animation.addByPrefix('angry', 'AHH speech bubble', 24);
@@ -226,11 +211,7 @@ class DialogueBoxDenpa extends FlxSpriteGroup
 	public static var DEFAULT_CHAR_Y:Float = 60;
 
 	function spawnCharacters() {
-		#if (haxe >= "4.0.0")
 		var charsMap:Map<String, Bool> = new Map();
-		#else
-		var charsMap:Map<String, Bool> = new Map<String, Bool>();
-		#end
 		for (i in 0...dialogueList.dialogue.length) {
 			if(dialogueList.dialogue[i] != null) {
 				var charToAdd:String = dialogueList.dialogue[i].portrait;
@@ -288,12 +269,10 @@ class DialogueBoxDenpa extends FlxSpriteGroup
 			bgFade.alpha += 0.5 * elapsed;
 			if(bgFade.alpha > 0.5) bgFade.alpha = 0.5;
 
-			if(PlayerSettings.player1.controls.ACCEPT || (FlxG.mouse.justPressed && ClientPrefs.mouseControls)) {
+			if(PlayerSettings.player1.controls.ACCEPT) {
 				if(!daText.finishedText) {
 					if(daText != null) {
-						daText.killTheTimer();
-						daText.kill();
-						remove(daText);
+						remove(daText, true);
 						daText.destroy();
 					}
 					daText = new Alphabet(DEFAULT_TEXT_X, DEFAULT_TEXT_Y, textToType, false, true, 0.0, 0.7);
@@ -316,10 +295,8 @@ class DialogueBoxDenpa extends FlxSpriteGroup
 
 					box.animation.curAnim.curFrame = box.animation.curAnim.frames.length - 1;
 					box.animation.curAnim.reverse();
-					daText.kill();
-					remove(daText);
+					remove(daText, true);
 					daText.destroy();
-					daText = null;
 					updateBoxOffsets(box);
 					FlxG.sound.music.fadeOut(1, 0);
 				} else {
@@ -389,19 +366,15 @@ class DialogueBoxDenpa extends FlxSpriteGroup
 			}
 		} else { //Dialogue ending
 			if(box != null && box.animation.curAnim.curFrame <= 0) {
-				box.kill();
-				remove(box);
+				remove(box, true);
 				box.destroy();
-				box = null;
 			}
 
 			if(bgFade != null) {
 				bgFade.alpha -= 0.5 * elapsed;
-				if(bgFade.alpha <= 0) {
-					bgFade.kill();
-					remove(bgFade);
+				if(bgFade.alpha == 0) {
+					remove(bgFade, true);
 					bgFade.destroy();
-					bgFade = null;
 				}
 			}
 
@@ -424,14 +397,13 @@ class DialogueBoxDenpa extends FlxSpriteGroup
 				for (i in 0...arrayCharacters.length) {
 					var leChar:DialogueCharacter = arrayCharacters[0];
 					if(leChar != null) {
+						remove(leChar, true);
 						arrayCharacters.remove(leChar);
-						leChar.kill();
-						remove(leChar);
 						leChar.destroy();
 					}
 				}
 				finishThing();
-				kill();
+				destroy();
 			}
 		}
 		super.update(elapsed);
