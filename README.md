@@ -7,6 +7,8 @@
 ![GitHub Latest (Including Pre-releases)](https://img.shields.io/github/v/release/UmbratheUmbreon/PublicDenpaEngine?include_prereleases&label=latest%20version)
 [![Discord](https://img.shields.io/discord/993277169876873326?label=discord)](https://discord.gg/BFaMfmTNaa)
 
+[![Star History Chart](https://api.star-history.com/svg?repos=UmbratheUmbreon/PublicDenpaEngine&type=Timeline)](https://star-history.com/#UmbratheUmbreon/PublicDenpaEngine&Timeline)
+
 # Friday Night Funkin': "DENPA" Engine
 
 ## Synopsis
@@ -101,7 +103,7 @@ This license agreement is subject to change at any time, and continued use of th
 
 1) Download the latest source .zip/.gz file.
 2) Extract the file using the default OS tools, 7zip, or WinRAR to extract.
-3) Install Haxe 4.2.5 from <https://haxe.org>.
+3) Install Haxe 4.3.0 from <https://haxe.org>.
 4) Run the QUICK SETUP.bat file to install the haxe libraries needed.
 5) Install Visual Studio Community 2017/2019.
 6) Open Visual Studio Installer.
